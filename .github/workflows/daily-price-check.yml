@@ -1,10 +1,8 @@
 name: Daily Royal Caribbean price check
 
 on:
-  push:
-    branches: [main]
   schedule:
-    - cron: "0 14 * * *"
+    - cron: "15 12 * * *"
   workflow_dispatch:
 
 permissions:
