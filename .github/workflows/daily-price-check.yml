@@ -1,0 +1,78 @@
+name: Daily Royal Caribbean price check
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: legend-cruise-price-watch
+  cancel-in-progress: false
+
+jobs:
+  check-price:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run official-site price check
+        id: pricecheck
+        continue-on-error: true
+        run: python price_check.py
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: royal-caribbean-debug-${{ github.run_number }}
+          path: debug/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Commit today's observation
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add price_history.csv
+          if git diff --cached --quiet; then
+            echo "No history change to commit."
+          else
+            git commit -m "Update cruise price $(date -u +%F)"
+            git push
+          fi
+
+      - name: Write run summary
+        if: always()
+        run: |
+          echo "## Legend of the Seas price watch" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Latest rows:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```csv' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 4 price_history.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail workflow if quote was unverified
+        if: steps.pricecheck.outcome == 'failure'
+        run: |
+          echo "The observation was saved as UNVERIFIED. See uploaded diagnostics."
+          exit 1
