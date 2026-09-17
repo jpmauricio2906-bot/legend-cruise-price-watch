@@ -32,12 +32,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -m playwright install --with-deps chromium
 
-      - name: Run official-site price check
+      - name: Run direct Royal Caribbean price check
         id: pricecheck
         continue-on-error: true
-        run: python price_check.py
+        run: python direct_check.py
 
       - name: Upload diagnostics
         if: always()
